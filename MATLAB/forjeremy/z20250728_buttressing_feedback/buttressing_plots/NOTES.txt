@@ -1,0 +1,5 @@
+
+
+ - use the .exp files in ice_extents.zip rather than the ones calculated in the Calc_exp step of the runme script
+ - note that the runme script now has 3 steps. I recommend you run steps 2 and 3 and compare the difference
+ - the buttressing_plots.zip has the buttressing numbers I calculated where i didn't gap fill the ITS_LIVE data where there were missing data

@@ -1,0 +1,50 @@
+<PAMDataset>
+  <Subdataset name="Surface_Elevation">
+    <PAMDataset>
+      <PAMRasterBand band="1">
+        <Metadata>
+          <MDI key="STATISTICS_MAXIMUM">3532.2919921875</MDI>
+          <MDI key="STATISTICS_MEAN">1806.5798288352</MDI>
+          <MDI key="STATISTICS_MINIMUM">-56.928001403809</MDI>
+          <MDI key="STATISTICS_STDDEV">761.04314464084</MDI>
+        </Metadata>
+      </PAMRasterBand>
+    </PAMDataset>
+  </Subdataset>
+  <Subdataset name="Thickness">
+    <PAMDataset>
+      <PAMRasterBand band="1">
+        <Metadata>
+          <MDI key="STATISTICS_MAXIMUM">1640.2923583984</MDI>
+          <MDI key="STATISTICS_MEAN">384.97176087682</MDI>
+          <MDI key="STATISTICS_MINIMUM">27.17290687561</MDI>
+          <MDI key="STATISTICS_STDDEV">215.01694597779</MDI>
+        </Metadata>
+      </PAMRasterBand>
+    </PAMDataset>
+  </Subdataset>
+  <Subdataset name="VX">
+    <PAMDataset>
+      <PAMRasterBand band="1">
+        <Metadata>
+          <MDI key="STATISTICS_MAXIMUM">915.16583251953</MDI>
+          <MDI key="STATISTICS_MEAN">1.2065030714114</MDI>
+          <MDI key="STATISTICS_MINIMUM">-878.23455810547</MDI>
+          <MDI key="STATISTICS_STDDEV">98.765373021075</MDI>
+        </Metadata>
+      </PAMRasterBand>
+    </PAMDataset>
+  </Subdataset>
+  <Subdataset name="VY">
+    <PAMDataset>
+      <PAMRasterBand band="1">
+        <Metadata>
+          <MDI key="STATISTICS_MAXIMUM">398.49389648438</MDI>
+          <MDI key="STATISTICS_MEAN">-32.435552046744</MDI>
+          <MDI key="STATISTICS_MINIMUM">-1539.8260498047</MDI>
+          <MDI key="STATISTICS_STDDEV">130.68978935533</MDI>
+        </Metadata>
+      </PAMRasterBand>
+    </PAMDataset>
+  </Subdataset>
+</PAMDataset>

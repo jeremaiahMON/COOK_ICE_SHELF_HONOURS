@@ -1,0 +1,19 @@
+Title example:
+Change in Velocity (2008 to 2018)
+
+font size:
+22 pt Helvetica
+
+
+XLIM:
+1011329.094506453,1144659.516467237
+
+YLIM:
+-2134332.263926772,-2046089.424256699
+
+
+X AXIS:
+Eastings (m)
+
+Y AXIS:
+Northings (m)

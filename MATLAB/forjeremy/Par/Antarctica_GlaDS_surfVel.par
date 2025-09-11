@@ -1,0 +1,143 @@
+%required Data
+datadir='/Volumes/FMac3/computing/data/antarctica/';
+geometryfile=[datadir 'bedmachine/BedMachineAntarctica-v3.nc'];
+
+% GEOMETRY
+disp('   Interpolating mask');
+mask = interpBedmachineAntarctica(md.mesh.x,md.mesh.y,'mask','nearest',geometryfile);
+md.mask.ice_levelset   = -1*ones(md.mesh.numberofvertices,1);
+md.mask.ocean_levelset = +1*ones(md.mesh.numberofvertices,1);
+
+% Ice on rocks:
+pos = find(mask < 1); %we also want a bit of ice where there are rocks
+md.mask.ice_levelset(pos) = 1;
+pos = find(mask==0 | mask==3);
+md.mask.ocean_levelset(pos) = -1;
+
+disp('   Setting up geometry');
+md.geometry.bed             = interpBedmachineAntarctica(md.mesh.x,md.mesh.y,'bed','nearest',geometryfile);
+md.geometry.surface         = interpBedmachineAntarctica(md.mesh.x,md.mesh.y,'surface','nearest',geometryfile);
+md.geometry.thickness		 = interpBedmachineAntarctica(md.mesh.x,md.mesh.y,'thickness','nearest',geometryfile);
+md.geometry.base				 = md.geometry.surface - md.geometry.thickness;
+
+%disp('   Fix bed at Vanderford');
+%in=ContourToNodes(md.mesh.x,md.mesh.y,'/Users/fmcc0003/issm/projects/aurora-mcmc/vani-setup/Exp/lowerVanderfordBed.exp',1);
+%pos = find(in & md.mask.ocean_levelset<0);
+%md.geometry.bed(pos) = md.geometry.bed(pos) - 200;
+
+disp('      -- correct surface');
+md.geometry.surface = max(md.geometry.surface, 1);
+md.geometry.thickness = md.geometry.surface - md.geometry.base;
+
+disp('      -- Adjusting ice thickness');
+pos = find(md.geometry.thickness <= 10);
+md.geometry.thickness(pos) = 10;
+md.geometry.base = md.geometry.surface - md.geometry.thickness;
+pos = find(md.geometry.base < md.geometry.bed);
+md.geometry.bed(pos) = md.geometry.base(pos)-200;
+
+disp('      -- ice shelf base based on hydrostatic equilibrium');
+in=ContourToNodes(md.mesh.x,md.mesh.y,'Exp/WilkesFloatingDomain.exp',1);
+md.geometry.bed(find(in)) = md.geometry.bed(find(in))-500;
+
+floating_base = md.materials.rho_ice/(md.materials.rho_ice - md.materials.rho_water)*md.geometry.surface;
+pos = find(floating_base > md.geometry.bed & md.mask.ocean_levelset<0);
+md.geometry.base(pos) = floating_base(pos);
+di = md.materials.rho_ice/md.materials.rho_water;
+md.geometry.thickness = md.geometry.surface - md.geometry.base;
+md.mask.ocean_levelset = md.geometry.thickness + md.geometry.bed/di;
+
+pos = find(md.geometry.base < md.geometry.bed | md.mask.ocean_levelset > 0);
+md.geometry.bed(pos) = md.geometry.base(pos);
+
+md.groundingline.intrusion_distance = 0;
+
+disp('   Adjusting ice mask');
+%Tricky part here: we want to offset the mask by one element so that we don't end up with a cliff at the transition
+pos_e = find(max(md.mask.ice_levelset(md.mesh.elements), [], 2) > 0);
+md.mask.ice_levelset(md.mesh.elements(pos_e, :)) = 1;
+% For the region where surface is NaN, set thickness to small value (consistency requires > 0)
+pos = find((md.mask.ice_levelset < 0).*(md.geometry.surface < 0));
+md.mask.ice_levelset(pos) = 1;
+pos = find((md.mask.ice_levelset < 0).*(isnan(md.geometry.surface)));
+md.mask.ice_levelset(pos) = 1;
+
+% VELOCITY 
+disp('   Reading velocities ');
+[md.inversion.vx_obs md.inversion.vy_obs] = interpMouginotAnt2017(md.mesh.x, md.mesh.y);
+pos = find(isnan(md.inversion.vx_obs) | isnan(md.inversion.vy_obs));
+md.inversion.vx_obs(pos) = 0;
+md.inversion.vy_obs(pos) = 0;
+md.inversion.vel_obs  = sqrt(md.inversion.vx_obs.^2 + md.inversion.vy_obs.^2);
+md.initialization.vx  = md.inversion.vx_obs;
+md.initialization.vy  = md.inversion.vy_obs;
+md.initialization.vz  = zeros(md.mesh.numberofvertices,1);
+md.initialization.vel = md.inversion.vel_obs;
+
+
+% GEOTHERMAL HEAT FLUX
+disp('   Geothermal flux from Staal'); % Watts/meter^2
+md.basalforcings.geothermalflux=interpStaal(md,md.mesh.x,md.mesh.y,datadir,'nearest','hres',true);
+
+
+% BASAL MELT
+disp('   Basal melt and temperature from ISMIP6'); % melt in units of m/yr ice eq.
+filename = '/Volumes/FMac3/computing/data/antarctica/ismip6/bmb/AntarcticISMIP6-Morlighem-2019-06-20.nc';
+disp(['Loading ' filename]);
+% Coordinates
+xdata  = double(ncread(filename,'x'));
+ydata  = double(ncread(filename,'y'));
+offset = 2;
+%    x-coords
+xmin = min(md.mesh.x(:)); xmax=max(md.mesh.x(:));
+posx = find(xdata<=xmax);
+id1x = max(1,find(xdata>=xmin,1)-offset);
+id2x = min(numel(xdata),posx(end)+offset);
+%    y-coords
+ymin = min(md.mesh.y(:)); ymax=max(md.mesh.y(:));
+posy = find(ydata<=ymax);
+id1y = max(1,find(ydata>=ymin,1)-offset);
+id2y = min(numel(ydata),posy(end)+offset);
+
+% Load data
+%    Basal melt
+mb_data = double(ncread(filename, 'mb', [id1x id1y], [id2x-id1x+1 id2y-id1y+1], [1 1]))'; % m/year ice equivalent
+%    Basal velocity
+%Do we want to use basal vel insteady of surface (probably!!)
+%vx_data  = double(ncread(filename, 'vx', [id1x id1y], [id2x-id1x+1 id2y-id1y+1], [1 1]))';
+%vy_data  = double(ncread(filename, 'vy', [id1x id1y], [id2x-id1x+1 id2y-id1y+1], [1 1]))';
+%vel_data = sqrt(vx.^2 + vy.^2);
+
+% Interpolate
+%    Interp coordinates
+xdata = xdata(id1x:id2x);
+ydata = ydata(id1y:id2y);
+%    Interp basal data onto mesh
+mb  = InterpFromGrid(xdata, ydata, mb_data, double(md.mesh.x), double(md.mesh.y));
+%vx  = InterpFromGrid(xdata, ydata, vx_data, double(md.mesh.x), double(md.mesh.y));
+%vy  = InterpFromGrid(xdata, ydata, vy_data, double(md.mesh.x), double(md.mesh.y));
+%vel = InterpFromGrid(xdata, ydata, vel_data, double(md.mesh.x), double(md.mesh.y));
+
+% No negative basal melt
+pos = find(mb < 0.0);
+mb(pos) = 0.0;
+% Convert to m/yr of water
+mb = mb*md.materials.rho_freshwater/md.materials.rho_ice;
+
+% Load the data!
+md.basalforcings.groundedice_melting_rate = mb;
+md.basalforcings.floatingice_melting_rate = interpRignotIceShelfMelt(md.mesh.x,md.mesh.y,'melt_steadystate');
+
+
+% REQUIRED ISSM INITIALIZATIONS
+disp('   Initialize fields that will cause consistancy errors');
+md.groundingline.intrusion_distance = 0;
+md.friction.coefficient = zeros(md.mesh.numberofvertices, 1);
+md.friction.p = ones(md.mesh.numberofelements, 1);
+md.friction.q = ones(md.mesh.numberofelements, 1);
+md.friction.effective_pressure = interpEhrenfeucht(md.mesh.x,md.mesh.y,md.mesh.elements,'effective_pressure');
+
+md.initialization.hydraulic_potential = interpEhrenfeucht(md.mesh.x,md.mesh.y,md.mesh.elements,'hydraulic_potential');
+md.initialization.watercolumn = interpEhrenfeucht(md.mesh.x,md.mesh.y,md.mesh.elements,'water_thickness');
+%md.initialization.waterfraction= interpEhrenfeucht(md.mesh.x,md.mesh.y,md.mesh.elements,'flotation_fraction');
+%md.initialization.channelarea = interpEhrenfeucht(md.mesh.x,md.mesh.y,md.mesh.elements,'channel_area');

@@ -1,0 +1,60 @@
+% FLOW LAW
+disp('   Creating flow law parameters (assume ice is at -10°C for now)');
+md.materials.rheology_n = 3*ones(md.mesh.numberofelements, 1);
+md.materials.rheology_B = cuffey(273.15 - 10)*ones(md.mesh.numberofvertices, 1);
+md.materials.rheology_law = 'Cuffey';
+
+
+% BASAL FRICTION
+disp('   Initialize basal friction using driving stress');
+disp('      -- Compute surface slopes and use 10 L2 projections');
+[sx, sy, s] = slope(md); sslope = averaging(md, s, 10);
+disp('      -- Process surface velocity data');
+vel = md.inversion.vel_obs;
+flags = (vel == 0); pos1 = find(flags); pos2 = find(~flags);
+vel(pos1) = griddata(md.mesh.x(pos2), md.mesh.y(pos2), vel(pos2), md.mesh.x(pos1), md.mesh.y(pos1));
+vel = max(vel, 0.1);
+disp('      -- Deduce friction coefficient for Budd friction law');
+md.friction.coefficient = sqrt(md.materials.rho_ice*md.geometry.thickness.*(sslope)./(md.friction.effective_pressure.*vel/md.constants.yts));
+md.friction.coefficient = min(md.friction.coefficient, 400);
+md.friction.p = ones(md.mesh.numberofelements, 1);
+md.friction.q = ones(md.mesh.numberofelements, 1);
+disp('      -- Extrapolate on ice free regions');
+flags = (md.mask.ice_levelset > 0); pos1 = find(flags); pos2 = find(~flags);
+md.friction.coefficient(pos1) = griddata(md.mesh.x(pos2), md.mesh.y(pos2), md.friction.coefficient(pos2), md.mesh.x(pos1), md.mesh.y(pos1));
+pos = find(isnan(md.friction.coefficient));
+md.friction.coefficient(pos)  = 1;
+
+% No friction on PURELY ocean element
+pos_e = find(min(md.mask.ocean_levelset(md.mesh.elements), [], 2) < 0);
+md.friction.coefficient(md.mesh.elements(pos_e, :)) = 0;
+
+
+% SURFACE MASS BALANCE 
+disp('   Loading accumulation rates from RACMO');
+%required Data
+accpath = '/Volumes/FMac/computing/data/antarctica/';
+md.smb.mass_balance= interpRACMOant(md.mesh.x,md.mesh.y);
+md.basalforcings.floatingice_melting_rate = interpRignotIceShelfMelt(md.mesh.x,md.mesh.y,'melt_steadystate');
+
+% INITALIZE THERMAL MODEL
+disp('   Setting up thermal model'); % degree Celsius
+% Land ice temperature at firn base
+md.initialization.temperature = -10*ones(md.mesh.numberofvertices,1);
+% do we want to use fields from GlaDS here?
+md.thermal.spctemperature = md.initialization.temperature;
+md.thermal.isenthalpy = 1;
+md.thermal.isdynamicbasalspc = 1;
+
+
+% BOUNDARY CONDITIONS (same as ISMIP6 runs)
+disp('   Set Boundary conditions');
+md.stressbalance.spcvx=NaN*ones(md.mesh.numberofvertices,1);
+md.stressbalance.spcvy=NaN*ones(md.mesh.numberofvertices,1);
+md.stressbalance.spcvz=NaN*ones(md.mesh.numberofvertices,1);
+md.stressbalance.referential=NaN*ones(md.mesh.numberofvertices,6);
+md.stressbalance.loadingforce=0*ones(md.mesh.numberofvertices,3);
+pos=find((md.mask.ice_levelset<0).*(md.mesh.vertexonboundary));
+md.stressbalance.spcvx(pos)=md.initialization.vx(pos);
+md.stressbalance.spcvy(pos)=md.initialization.vy(pos);
+md.stressbalance.spcvz(pos)=0;
